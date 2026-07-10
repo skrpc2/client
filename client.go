@@ -1,12 +1,16 @@
 package rycli
 
 import (
+	"bytes"
+	"context"
 	"fmt"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/valyala/fasthttp"
+	"github.com/cloudwego/hertz/pkg/app"
+	"github.com/cloudwego/hertz/pkg/app/client"
+	"github.com/cloudwego/hertz/pkg/protocol"
 )
 
 func createNewClient() *Client {
@@ -14,7 +18,11 @@ func createNewClient() *Client {
 		clientTimeout: 12 * time.Second,
 		clientPool: &sync.Pool{
 			New: func() interface{} {
-				return new(fasthttp.Client)
+				c, err := client.NewClient()
+				if err != nil {
+					panic(err)
+				}
+				return c
 			},
 		},
 		//customHeaders: getDefaultHeadersMap(),
@@ -41,14 +49,14 @@ func (cl *Client) SetClientTimeout(duration time.Duration) {
 	cl.clientTimeout = duration
 }
 
-func (cl *Client) makeCallRequest(fctx *fasthttp.RequestCtx, method string, args interface{}) ([]byte, int, error) {
-	req := fasthttp.AcquireRequest()
-	defer req.Reset()
+func (cl *Client) makeCallRequest(fctx *app.RequestContext, method string, args interface{}) ([]byte, int, error) {
+	req := protocol.AcquireRequest()
+	defer protocol.ReleaseRequest(req)
 
 	name := strings.SplitN(method, "/", 5)
 	if len(name) > 1 {
 		if fctx != nil {
-		fctx.Request.Header.CopyTo(&req.Header)
+			fctx.Request.Header.CopyTo(&req.Header)
 		}
 		/*
 		req.Header.Del("Host")
@@ -70,18 +78,18 @@ func (cl *Client) makeCallRequest(fctx *fasthttp.RequestCtx, method string, args
 	//debugLogging(cl, logrus.Fields{"headers": req.Header.String(), "request": byteBody}, "request prepared")
 
 	req.SetBody(byteBody)
-	resp := fasthttp.AcquireResponse()
-	defer resp.Reset()
+	resp := protocol.AcquireResponse()
+	defer protocol.ReleaseResponse(resp)
 
-	cli := cl.clientPool.Get().(*fasthttp.Client)
+	cli := cl.clientPool.Get().(*client.Client)
 
 	if cl.clientTimeout == 0 {
-		if err := cli.Do(req, resp); err != nil {
+		if err := cli.Do(context.Background(), req, resp); err != nil {
 			cl.clientPool.Put(cli)
 			return nil, 0, err
 		}
 	} else {
-		if err := cli.DoTimeout(req, resp, cl.clientTimeout); err != nil {
+		if err := cli.DoTimeout(context.Background(), req, resp, cl.clientTimeout); err != nil {
 			cl.clientPool.Put(cli)
 			return nil, 0, err
 		}
@@ -105,11 +113,11 @@ func (cl *Client) makeCallRequest(fctx *fasthttp.RequestCtx, method string, args
 		return nil, 0, err
 	}
 
-	return resp.SwapBody(nil), statusCode, nil
+	return bytes.Clone(resp.Body()), statusCode, nil
 }
 
 // Call run remote procedure on JSON-RPC 2.0 API with parsing answer to provided structure or interface
-func (cl *Client) Call(fctx *fasthttp.RequestCtx, method string, args, result interface{}) error {
+func (cl *Client) Call(fctx *app.RequestContext, method string, args, result interface{}) error {
 
 	resp, _, err := cl.makeCallRequest(fctx, method, args)
 	//fmt.Println("Call = ", string(resp))
