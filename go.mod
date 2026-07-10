@@ -1,4 +1,4 @@
-module github.com/ryrpc/client
+module github.com/skrpc2/client
 
 go 1.20
 
