@@ -63,9 +63,12 @@ func (cl *Client) makeCallRequest(fctx *app.RequestContext, method string, args 
 		req.Header.Del("User-Agent")
 		req.Header.Del("Content-Type")
   		*/
+		fmt.Println("func", name[1])
 		req.Header.Set("func", name[1])
 	}
 
+	fmt.Println("url: ", cl.BaseURL + method)
+	
 	req.SetRequestURI(cl.BaseURL + method)
 	req.Header.Set("User-Agent", userAgent)
 	req.Header.Set("Content-Type", defaultContentType)
