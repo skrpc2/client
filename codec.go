@@ -6,7 +6,6 @@ import (
 	"sync"
 
 	"github.com/apache/fory/go/fory"
-	"github.com/apache/fory/go/fory/threadsafe"
 )
 
 const baseTypeName = "ryrpc.Base"
@@ -17,16 +16,73 @@ type PBase struct {
 	Data []byte
 }
 
-var (
-	codec   = threadsafe.New(fory.WithXlang(false), fory.WithCompatible(true))
-	typeReg sync.Map // type key -> *sync.Once
-)
-
-func init() {
-	if err := codec.RegisterStructByName(&PBase{}, baseTypeName); err != nil {
-		panic(fmt.Sprintf("rycli: register PBase: %v", err))
-	}
+type typeEntry struct {
+	proto reflect.Type
+	name  string
 }
+
+type pooledCodec struct {
+	pool            sync.Pool
+	registeredTypes sync.Map // registration key -> typeEntry
+	typeOnce        sync.Map // reflect type key -> *sync.Once
+}
+
+func newPooledCodec() *pooledCodec {
+	c := &pooledCodec{}
+	c.pool = sync.Pool{New: func() any { return c.newFory() }}
+	c.registeredTypes.Store(baseTypeName, typeEntry{
+		proto: reflect.TypeOf(PBase{}),
+		name:  baseTypeName,
+	})
+	return c
+}
+
+func (c *pooledCodec) newFory() *fory.Fory {
+	f := fory.New(fory.WithXlang(false), fory.WithCompatible(true))
+	c.applyAll(f)
+	return f
+}
+
+func (c *pooledCodec) applyAll(f *fory.Fory) {
+	c.registeredTypes.Range(func(_, value any) bool {
+		entry := value.(typeEntry)
+		inst := reflect.New(entry.proto).Interface()
+		_ = f.RegisterStructByName(inst, entry.name)
+		return true
+	})
+}
+
+func (c *pooledCodec) acquire() *fory.Fory {
+	f := c.pool.Get().(*fory.Fory)
+	c.applyAll(f)
+	return f
+}
+
+func (c *pooledCodec) release(f *fory.Fory) {
+	f.Reset()
+	c.pool.Put(f)
+}
+
+func (c *pooledCodec) Serialize(v any) ([]byte, error) {
+	f := c.acquire()
+	data, err := f.Serialize(v)
+	if err != nil {
+		c.release(f)
+		return nil, err
+	}
+	out := make([]byte, len(data))
+	copy(out, data)
+	c.release(f)
+	return out, nil
+}
+
+func (c *pooledCodec) Deserialize(data []byte, v any) error {
+	f := c.acquire()
+	defer c.release(f)
+	return f.Deserialize(data, v)
+}
+
+var codec = newPooledCodec()
 
 func typeKey(t reflect.Type) string {
 	if t.Kind() == reflect.Ptr {
@@ -43,12 +99,11 @@ func ensureStructRegistered(t reflect.Type) error {
 		return nil
 	}
 	key := typeKey(t)
-	onceVal, _ := typeReg.LoadOrStore(key, &sync.Once{})
+	onceVal, _ := codec.typeOnce.LoadOrStore(key, &sync.Once{})
 	once := onceVal.(*sync.Once)
 	var regErr error
 	once.Do(func() {
-		inst := reflect.New(t).Interface()
-		regErr = codec.RegisterStructByName(inst, key)
+		codec.registeredTypes.Store(key, typeEntry{proto: t, name: key})
 	})
 	return regErr
 }
