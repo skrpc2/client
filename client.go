@@ -49,6 +49,11 @@ func (cl *Client) SetClientTimeout(duration time.Duration) {
 	cl.clientTimeout = duration
 }
 
+// SetDebug enables request logging for troubleshooting.
+func (cl *Client) SetDebug(enabled bool) {
+	cl.debug = enabled
+}
+
 func (cl *Client) makeCallRequest(fctx *app.RequestContext, method string, args interface{}) ([]byte, int, error) {
 	req := protocol.AcquireRequest()
 	defer protocol.ReleaseRequest(req)
@@ -58,17 +63,13 @@ func (cl *Client) makeCallRequest(fctx *app.RequestContext, method string, args 
 		if fctx != nil {
 			fctx.Request.Header.CopyTo(&req.Header)
 		}
-		/*
-		req.Header.Del("Host")
-		req.Header.Del("User-Agent")
-		req.Header.Del("Content-Type")
-  		*/
-		fmt.Println("func", name[1])
 		req.Header.Set("func", name[1])
 	}
 
-	fmt.Println("url: ", cl.BaseURL + method)
-	
+	if cl.debug {
+		fmt.Println("ryrpc:", cl.BaseURL+method)
+	}
+
 	req.SetRequestURI(cl.BaseURL + method)
 	req.Header.Set("User-Agent", userAgent)
 	req.Header.Set("Content-Type", defaultContentType)

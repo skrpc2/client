@@ -11,12 +11,13 @@ type ErrorCode int
 
 const (
 	userAgent          = "ryrpc-client"
-	defaultContentType = "application/x-www-form-urlencoded"
+	defaultContentType = "application/fory"
 )
 
-// Client basic struct that contains all method to work with JSON-RPC 2.0 protocol
+// Client basic struct that contains all method to work with RPC protocol
 type Client struct {
 	disableHeaderNamesNormalizing bool
+	debug                         bool
 	BaseURL                       string
 	clientTimeout                 time.Duration
 	//customHeaders                 sync.Map

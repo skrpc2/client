@@ -1,12 +1,10 @@
 module github.com/skrpc2/client
 
-go 1.20
+go 1.25.0
 
 require (
+	github.com/apache/fory/go/fory v1.5.0
 	github.com/cloudwego/hertz v0.10.5
-	github.com/fxamacker/cbor/v2 v2.4.0
-	github.com/golang/protobuf v1.5.3
-	google.golang.org/protobuf v1.34.1
 )
 
 require (
@@ -22,7 +20,7 @@ require (
 	github.com/tidwall/match v1.1.1 // indirect
 	github.com/tidwall/pretty v1.2.0 // indirect
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
-	github.com/x448/float16 v0.8.4 // indirect
 	golang.org/x/arch v0.0.0-20210923205945-b76863e36670 // indirect
 	golang.org/x/sys v0.30.0 // indirect
+	google.golang.org/protobuf v1.34.1 // indirect
 )
