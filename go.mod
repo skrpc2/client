@@ -1,6 +1,6 @@
 module github.com/skrpc2/client
 
-go 1.25.0
+go 1.26.5
 
 require (
 	github.com/apache/fory/go/fory v1.5.0
